@@ -1,153 +1,106 @@
-import random
-board_bombs = []
-board_display = []
-opened = []
-flags = []
-for i in range(11):
-    board_bombs.append([0] * 11)
-    board_display.append([0] * 11)
-    opened.append([False] * 11)
-    flags.append([False] * 11)
-def reveal(row, col):
-    if row < 1 or row > 10 or col < 1 or col > 10:
-        return
-    if opened[row][col] or flags[row][col]:
-        return
-    opened[row][col] = True
-    if board_display[row][col] != 0:
-        return
-    for i in range(-1, 2):
-        for j in range(-1, 2):
-            if i == 0 and j == 0:
-                continue
-            reveal(row + i, col + j)
-def show_board():
-    for row in range(1, 11):
-        for col in range(1, 11):
-            if flags[row][col]:
-                print('F', end=' ')
-            elif opened[row][col]:
-                print(board_display[row][col], end=' ')
+from urllib.request import urlopen
+import csv
+import json
+import time
+csv_url = "https://gitee.com/wiedersehen/basic_function_project/raw/master/weather_district_id.csv"
+resp = urlopen(csv_url)
+with open("weather_district_id.csv", mode="wb") as f:
+    f.write(resp.read())
+province_data = {}
+with open("weather_district_id.csv", encoding='utf-8') as f:
+    reader = csv.reader(f)
+    next(reader)
+    for row in reader:
+        if len(row) >= 12:
+            province = row[11]
+            district = row[5]
+            areaid = row[0]
+            
+            if province not in province_data:
+                province_data[province] = []
+            province_data[province].append((district, areaid))
+print(f"成功读取了 {len(province_data)} 个省份的数据")
+def get_weather(areaid):
+    url = f"http://t.weather.itboy.net/api/weather/city/{areaid}"
+    response = urlopen(url)
+    text = response.read().decode('utf-8')
+    print(f"API返回数据前50个字符: {text[:50]}")
+    if "success" not in text:
+        return None
+    dict_weather = json.loads(text)
+    temps = []
+    if "data" in dict_weather and "forecast" in dict_weather["data"]:
+        forecast = dict_weather["data"]["forecast"]
+        for day in forecast:
+            # 使用条件判断替换try-except
+            if "high" in day and "low" in day:
+                high_str = day["high"]
+                low_str = day["low"]
+                
+                # 提取数字部分
+                high_digits = ''.join(filter(str.isdigit, high_str))
+                low_digits = ''.join(filter(str.isdigit, low_str))
+                
+                # 检查是否成功提取到数字
+                if high_digits and low_digits:
+                    high = int(high_digits)
+                    low = int(low_digits)
+                    
+                    avg_temp = (high + low) / 2
+                    temps.append(avg_temp)
+                    print(f"      温度: 高{high}℃ 低{low}℃ 平均{avg_temp}℃")
+                else:
+                    print(f"      无法提取温度数字")
             else:
-                print('*', end=' ')
-        print()
-def show_all_board():
-    for row in range(1, 11):
-        for col in range(1, 11):
-            if board_bombs[row][col] == 1:
-                print('@', end=' ')
+                print(f"      无法找到高低温数据")
+    return temps
+province_temps = {}
+for province, districts in province_data.items():
+    print(f"正在获取{province}的天气数据...")
+    daily_temps = [[] for _ in range(7)]
+    sample_districts = districts[:2] if len(districts) > 2 else districts
+    valid_data = False
+    for district, areaid in sample_districts:
+        print(f"  正在获取{district}(ID:{areaid})的天气数据...")
+        temps = get_weather(areaid)
+        if temps and len(temps) > 0:
+            valid_data = True
+            for i, temp in enumerate(temps):
+                if i < 7:
+                    daily_temps[i].append(temp)
+        time.sleep(1)
+    if valid_data:
+        avg_temps = []
+        for day_temps in daily_temps:
+            if day_temps:
+                avg = sum(day_temps) / len(day_temps)
+                avg_temps.append(avg)
+                print(f"  第{len(avg_temps)}天平均温度: {round(avg, 1)}℃")
             else:
-                print(board_display[row][col], end=' ')
-        print()
-def display_empty_board():
-    for row in range(1, 11):
-        for col in range(1, 11):
-            print('*', end=' ')
-        print()
-def get_first_move():
-    while True:
-        cmd = input().strip()
-        if cmd == 'q':
-            return None
-        if len(cmd) == 3 and cmd[0] == 'r':
-            row_char = cmd[1]
-            col_char = cmd[2]
-            if ('1' <= row_char <= '9') and ('1' <= col_char <= '9'):
-                row = int(row_char)
-                col = int(col_char)
-                return row, col
-            else:
-                print("坐标必须是1-9之间的数字，请重试")
-        else:
-            print("输入格式不正确")
-def get_move():
-    cmd = input().strip()
-    if cmd == 'q':
-        return 'q', 0, 0
-    if len(cmd) == 3:
-        action = cmd[0]
-        row_char = cmd[1]
-        col_char = cmd[2]
-        if ('1' <= row_char <= '9') and ('1' <= col_char <= '9'):
-            row = int(row_char)
-            col = int(col_char)
-            return action, row, col
-        else:
-            print("坐标必须是1-9之间的数字")
-    else:
-        print("输入格式不正确")
-    return None, 0, 0
+                avg_temps.append(0)
+                print(f"  第{len(avg_temps)}天没有温度数据")
+        province_temps[province] = avg_temps
 
-def place_bombs(first_row, first_col):
-    i = 0
-    while i < 10:
-        x = random.randint(1, 9)
-        y = random.randint(1, 9)
-        if board_bombs[x][y] == 0 and (x, y) != (first_row, first_col):
-            board_bombs[x][y] = 1
-            i += 1
-def calculate_adjacent_bombs():
-    for row in range(1, 11):
-        for col in range(1, 11):
-            if board_bombs[row][col] == 1:
-                board_display[row][col] = '@'
-            else:
-                count = 0
-                for i in range(-1, 2):
-                    for j in range(-1, 2):
-                        if i == 0 and j == 0:
-                            continue
-                        new_row = row + i
-                        new_col = col + j
-                        if 0 <= new_row < 11 and 0 <= new_col < 11:
-                            if board_bombs[new_row][new_col] == 1:
-                                count += 1
-                board_display[row][col] = count
-def check_win():
-    for row in range(1, 11):
-        for col in range(1, 11):
-            if board_bombs[row][col] == 0 and not opened[row][col]:
-                return False
-    return True
-def handle_move(action, row, col):
-    if action == 'f':
-        flags[row][col] = not flags[row][col]
-        return True
-    elif action == 'r':
-        if board_bombs[row][col] == 1:
-            print("踩到炸弹了！游戏结束")
-            for r in range(1, 11):
-                for c in range(1, 11):
-                    if board_bombs[r][c] == 1:
-                        opened[r][c] = True
-            show_all_board()
-            return False
-        reveal(row, col)
-        return True
-    return True
-def main():
-    print("欢迎玩扫雷游戏！")
-    display_empty_board()
-    print("输入操作: r行列(揭开) 或 f行列(插旗) 或 q(退出)")
-    first_move = get_first_move()
-    if first_move is None:
-        return
-    row, col = first_move
-    place_bombs(row, col)
-    calculate_adjacent_bombs()
-    reveal(row, col)
-    game_continue = True
-    while game_continue:
-        show_board()
-        if check_win():
-            print("你赢了！")
-            break
-        print("输入操作: r行列(揭开) 或 f行列(插旗) 或 q(退出)")
-        action, row, col = get_move()
-        if action == 'q':
-            break
-        elif action is None:
-            continue
-        game_continue = handle_move(action, row, col)
+print("\n各省未来一周平均温度:")
+print("省份", end="")
+for i in range(7):
+    print(f"\t第{i+1}天", end="")
+print()
 
-main()
+for province, temps in province_temps.items():
+    print(province, end="")
+    for temp in temps:
+        print(f"\t{round(temp, 1)}℃", end="")
+    print()
+
+with open("province_temps.txt", "w", encoding="utf-8") as f:
+    f.write("省份")
+    for i in range(7):
+        f.write(f"\t第{i+1}天")
+    f.write("\n")
+    
+    for province, temps in province_temps.items():
+        f.write(province)
+        for temp in temps:
+            f.write(f"\t{round(temp, 1)}℃")
+        f.write("\n")
