@@ -1,0 +1,49 @@
+import json
+import os
+import requests
+import time
+from selenium import webdriver 
+headers={"User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"}
+url = "https://movie.douban.com/typerank?type_name=%E7%A7%91%E5%B9%BB&type=17&interval_id=100:90&action="
+browser = webdriver.Chrome()
+browser.get(url = url)
+browser.implicitly_wait(20)
+time.sleep(3)
+content = browser.page_source
+with open("douban.txt", "w", encoding="utf-8") as f:
+    f.write(content)
+browser.quit()
+movies_list = []
+start_pos = 0
+while True:
+    name_pos = content.find('<span class="drc-subject-info-title-text">', start_pos)
+    if name_pos == -1:
+        break
+    name_start = content.find('>', name_pos) + 1
+    name_end = content.find('</span>', name_start)
+    movie_name = content[name_start:name_end].strip()
+    info_pos = content.find('<div class="drc-subject-info-subtitle">', name_end)
+    info_start = content.find('>', info_pos) + 1
+    info_end = content.find('</div>', info_start)
+    movie_info = content[info_start:info_end].strip()
+    info_parts = movie_info.split(' / ')
+    movie_dict = {
+        'name': movie_name
+    }
+    if len(info_parts) >= 1:
+        movie_dict['release_date'] = info_parts[0].strip()
+    if len(info_parts) >= 2:
+        movie_dict['region'] = info_parts[1].strip()
+    if len(info_parts) >= 3:
+        movie_dict['genre'] = info_parts[2].strip()
+    if len(info_parts) >= 4:
+        movie_dict['director'] = info_parts[3].strip()
+    if len(info_parts) >= 5:
+        movie_dict['actors'] = info_parts[4].strip()
+    movies_list.append(movie_dict)
+    start_pos = info_end
+with open("movie.json", "w", encoding="utf-8") as f:
+    json.dump(movies_list, f, ensure_ascii=False, indent=4)
+if movies_list:
+    first_movie = movies_list[0]
+    print(f" 名字: {first_movie.get('name')}, 上映日期: {first_movie.get('release_date')}, 类型: {first_movie.get('genre')}")
